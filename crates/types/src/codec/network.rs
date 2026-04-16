@@ -88,8 +88,7 @@ impl HasEncodedLen<sync::Response<ArcContext>> for NetCodec {
         ProtobufCodec
             .encoded_len(response)
             .map_err(CodecError::Protobuf)
-        // TODO: Phase 2 - Add 1 for the version byte once versioned encoding is enabled
-        // .map(|len| len + 1)
+            .map(|len| len + 1)
     }
 }
 

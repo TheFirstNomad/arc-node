@@ -14,17 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Arc EVM Node
-//!
-//! Implements the core EVM traits that bind all of the execution layer
-//! functionality together.
+use std::time::Duration;
 
-pub mod engine;
-pub mod node;
-pub mod payload;
-pub mod rpc;
-pub mod rpc_middleware;
+pub(crate) const SUMMARY_FILE_NAME: &str = "summary.csv";
 
-// Re-export commonly used types
-pub use engine::ArcEngineValidator;
-pub use rpc_middleware::ArcRpcLayer;
+pub(crate) fn duration_to_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1_000.0
+}
+
+pub(crate) fn fmt_hash<T: std::fmt::LowerHex>(value: T) -> String {
+    format!("{value:#x}")
+}

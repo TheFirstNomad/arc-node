@@ -22,7 +22,8 @@ use tracing::error;
 use arc_consensus_db::invalid_payloads::StoredInvalidPayloads;
 use arc_consensus_types::evidence::StoredMisbehaviorEvidence;
 use arc_consensus_types::{
-    Address, ArcContext, BlockHash, CommitCertificateType, Height, Round, ValidatorSet,
+    signing::PublicKey, Address, ArcContext, BlockHash, CommitCertificateType, Height, Round,
+    ValidatorSet,
 };
 use malachitebft_core_types::CommitCertificate;
 
@@ -55,6 +56,7 @@ pub struct Status {
     pub height: Height,
     pub round: Round,
     pub address: Address,
+    pub public_key: PublicKey,
     pub proposer: Option<Address>,
     pub height_start_time: SystemTime,
     pub prev_payload_hash: Option<BlockHash>,

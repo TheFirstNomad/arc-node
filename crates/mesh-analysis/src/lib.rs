@@ -27,6 +27,6 @@ pub use parse::parse_all_metrics;
 pub use report::format_report;
 pub use tier::{classify_all, MeshTier};
 pub use types::{
-    DiscoveredPeer, MeshAnalysis, MeshDisplayOptions, NodeMetricsData, NodeType, TopicAnalysis,
-    ValidatorConnectivity,
+    DiscoveredPeer, MeshAnalysis, MeshDisplayOptions, MessageCounts, NodeMetricsData, NodeType,
+    TopicAnalysis, ValidatorConnectivity,
 };

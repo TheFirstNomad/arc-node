@@ -186,6 +186,12 @@ impl Testnet {
                 )
             }
             InfraType::Remote => {
+                let owner_id = if infra_data.control_center.is_some() {
+                    infra::ssm::ensure_owner_id(&dir)
+                        .wrap_err("Failed to initialize local SSM owner ID")?
+                } else {
+                    String::new()
+                };
                 let terraform = Terraform::new(
                     &repo_root_dir.join("crates").join("quake").join("terraform"),
                     &relative_dir,
@@ -194,8 +200,9 @@ impl Testnet {
                     node_names,
                     manifest.build_network_topology(),
                 )?;
-                let ssm_tunnels = infra::ssm::Ssm::new(infra_data.control_center.as_ref())
-                    .wrap_err("Failed to initialize SSM tunnels")?;
+                let ssm_tunnels =
+                    infra::ssm::Ssm::new(owner_id, infra_data.control_center.as_ref())
+                        .wrap_err("Failed to initialize SSM tunnels")?;
                 Arc::new(
                     RemoteInfra::new(
                         &repo_root_dir,
@@ -370,6 +377,9 @@ impl Testnet {
                 setup::generate_prometheus_config(&path, self.nodes_metadata.values())?;
             }
             InfraType::Remote => {
+                infra::ssm::ensure_owner_id(&self.dir)
+                    .wrap_err("Failed to create local SSM owner ID")?;
+
                 // Get consensus container IPs for all nodes (needed for persistent peers)
                 let consensus_addresses_map = self.nodes_metadata.consensus_ip_addresses_map();
 
@@ -897,6 +907,7 @@ impl Testnet {
                 mesh_only,
                 peers,
                 peers_full,
+                duplicates,
             }) => {
                 let metrics_urls = self.nodes_metadata.all_consensus_metrics_urls();
                 let raw_metrics = crate::mesh::fetch_all_metrics(&metrics_urls).await;
@@ -911,6 +922,7 @@ impl Testnet {
                         show_mesh: true,
                         show_peers: peers || peers_full,
                         show_peers_full: peers_full,
+                        show_duplicates: duplicates,
                     };
                     print!("{}", crate::mesh::format_report(&analysis, &options));
                 }
@@ -918,25 +930,68 @@ impl Testnet {
             Some(InfoSubcommand::Perf {
                 latency_only,
                 throughput_only,
+                interval,
+                warmup_seconds,
+                observation_seconds,
             }) => {
                 let metrics_urls = self.nodes_metadata.all_consensus_metrics_urls();
-                let raw_metrics = arc_checks::fetch_all_metrics(&metrics_urls).await;
-                let mut nodes = arc_checks::parse_perf_metrics(&raw_metrics);
+                let options = arc_checks::PerfDisplayOptions {
+                    show_latency: !throughput_only,
+                    show_throughput: !latency_only,
+                    show_summary: !latency_only && !throughput_only,
+                };
 
-                crate::util::assign_node_groups(
-                    nodes.iter_mut().map(|n| (n.name.as_str(), &mut n.group)),
-                    &self.manifest.nodes,
-                );
+                if interval {
+                    if warmup_seconds > 0 {
+                        println!("Warming up ({warmup_seconds}s) before first scrape...");
+                        tokio::time::sleep(std::time::Duration::from_secs(warmup_seconds)).await;
+                    }
+                    let raw_before = arc_checks::fetch_all_metrics(&metrics_urls).await;
+                    println!("Observing ({observation_seconds}s) before second scrape...");
+                    tokio::time::sleep(std::time::Duration::from_secs(observation_seconds)).await;
+                    let raw_after = arc_checks::fetch_all_metrics(&metrics_urls).await;
 
-                if nodes.is_empty() {
-                    println!("No nodes responded to metrics requests. Is the testnet running?");
+                    let nodes = crate::util::parse_perf_metrics_delta_with_groups(
+                        &raw_before,
+                        &raw_after,
+                        &self.manifest.nodes,
+                    );
+
+                    if nodes.is_empty() {
+                        println!(
+                            "No interval perf data (no nodes with metrics in both scrapes). Is the testnet running?"
+                        );
+                    } else {
+                        print!(
+                            "{}",
+                            arc_checks::format_perf_report(
+                                &nodes,
+                                &options,
+                                arc_checks::PerfReportKind::Interval {
+                                    observation_secs: observation_seconds,
+                                },
+                            )
+                        );
+                    }
                 } else {
-                    let options = arc_checks::PerfDisplayOptions {
-                        show_latency: !throughput_only,
-                        show_throughput: !latency_only,
-                        show_summary: !latency_only && !throughput_only,
-                    };
-                    print!("{}", arc_checks::format_perf_report(&nodes, &options));
+                    let raw_metrics = arc_checks::fetch_all_metrics(&metrics_urls).await;
+                    let nodes = crate::util::parse_perf_metrics_with_groups(
+                        &raw_metrics,
+                        &self.manifest.nodes,
+                    );
+
+                    if nodes.is_empty() {
+                        println!("No nodes responded to metrics requests. Is the testnet running?");
+                    } else {
+                        print!(
+                            "{}",
+                            arc_checks::format_perf_report(
+                                &nodes,
+                                &options,
+                                arc_checks::PerfReportKind::CumulativeSinceStart,
+                            )
+                        );
+                    }
                 }
             }
             Some(InfoSubcommand::Store { nodes }) => {

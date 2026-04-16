@@ -31,7 +31,9 @@ use arc_signer::ArcSigningProvider;
 use crate::block::ConsensusBlock;
 use crate::metrics::AppMetrics;
 use crate::payload::{validate_consensus_block, EnginePayloadValidator};
-use crate::proposal_parts::{assemble_block_from_parts, validate_proposal_parts};
+use crate::proposal_parts::{
+    assemble_block_from_parts, resolve_expected_proposer, validate_proposal_parts,
+};
 use crate::state::State;
 use crate::store::Store;
 use crate::streaming::{InsertResult, PartStreamsMap};
@@ -315,10 +317,9 @@ async fn process_proposal_parts(
 
     debug_assert_eq!(parts_height, ctx.current_height);
 
-    // Proposal is for the current height, validate its proposer and signature
+    // Proposal is for the current height, validate its proposer and signature.
     let expected_proposer =
-        ctx.proposer_selector
-            .select_proposer(ctx.current_validator_set, parts_height, parts_round);
+        resolve_expected_proposer(ctx.proposer_selector, ctx.current_validator_set, &parts);
 
     if !validate_proposal_parts(&parts, expected_proposer, ctx.signing_provider).await {
         return Ok(None);

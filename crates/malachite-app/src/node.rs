@@ -37,7 +37,7 @@ use bytesize::ByteSize;
 use eyre::Context;
 use rand::rngs::OsRng;
 use tokio::signal::unix::SignalKind;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -101,6 +101,8 @@ pub struct Handle {
     pub store_monitor: JoinHandle<()>,
     pub tx_event: TxEvent<ArcContext>,
     pub cancel_token: CancellationToken,
+    /// Fires when the EL IPC watchdog triggered shutdown (as opposed to SIGTERM or normal halt).
+    el_watchdog_triggered: oneshot::Receiver<()>,
     /// Kept alive to prevent the app request channel from closing when RPC is disabled.
     _tx_app_req: mpsc::Sender<AppRequest>,
 }
@@ -666,6 +668,27 @@ impl App {
         let tx_event = channels.events.clone();
         let cancel_token = CancellationToken::new();
 
+        // Watchdog: cancel the app task if the EL IPC connection closes unexpectedly.
+        // run() will detect the signal and return an error, letting the tokio runtime
+        // unwind naturally (running all Drop implementations) instead of process::exit.
+        let engine_for_watchdog = engine.clone();
+        let (el_watchdog_tx, el_watchdog_rx) = oneshot::channel::<()>();
+        tokio::spawn({
+            let cancel_token = cancel_token.clone();
+            async move {
+                tokio::select! {
+                    _ = engine_for_watchdog.wait_for_disconnect() => {
+                        tracing::error!("EL IPC connection closed; shutting down");
+                        // Send before cancel so the oneshot is filled before the app task
+                        // can observe cancellation and exit, eliminating a try_recv race.
+                        el_watchdog_tx.send(()).ok();
+                        cancel_token.cancel();
+                    }
+                    _ = cancel_token.cancelled() => {}
+                }
+            }
+        });
+
         // Start the application task
         let app_handle = tokio::spawn({
             let cancel_token = cancel_token.clone();
@@ -685,6 +708,7 @@ impl App {
             tx_event,
             store,
             cancel_token,
+            el_watchdog_triggered: el_watchdog_rx,
             _tx_app_req: tx_app_req,
         })
     }
@@ -695,7 +719,7 @@ impl App {
         }
 
         // Start the application
-        let handles = match self.start().await {
+        let mut handles = match self.start().await {
             Ok(handles) => handles,
             Err(e) => {
                 let startup_error = e.wrap_err("Node failed to start");
@@ -714,6 +738,13 @@ impl App {
 
         // Wait for the application to finish
         let result = handles.app.await?;
+
+        // If the EL IPC watchdog triggered the shutdown, propagate an error so the
+        // caller (main) exits with a non-zero code. The tokio runtime unwinds naturally
+        // after run() returns, running all Drop implementations — no process::exit needed.
+        if handles.el_watchdog_triggered.try_recv().is_ok() {
+            return Err(eyre::eyre!("EL IPC connection closed unexpectedly"));
+        }
 
         if let Err(e) = &result {
             // If the application halted due to reaching a configured height,

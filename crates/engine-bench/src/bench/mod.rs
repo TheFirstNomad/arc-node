@@ -14,17 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Arc EVM Node
-//!
-//! Implements the core EVM traits that bind all of the execution layer
-//! functionality together.
+use crate::cli::Command;
 
-pub mod engine;
-pub mod node;
-pub mod payload;
-pub mod rpc;
-pub mod rpc_middleware;
+mod context;
+mod fixture;
+mod helpers;
+pub mod new_payload_fcu;
+mod output;
+mod prepare_payload;
 
-// Re-export commonly used types
-pub use engine::ArcEngineValidator;
-pub use rpc_middleware::ArcRpcLayer;
+pub async fn run(command: Command) -> eyre::Result<()> {
+    match command {
+        Command::PreparePayload(args) => prepare_payload::run(args).await,
+        Command::NewPayloadFcu(args) => new_payload_fcu::run(args).await,
+    }
+}

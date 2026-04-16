@@ -286,7 +286,18 @@ fn db_migrate(args: &Args, cmd: &MigrateCmd) -> Result<()> {
     }
 
     if cmd.dry_run {
-        info!("Dry-run mode: would perform migration but not committing");
+        let stats = coordinator
+            .preview_migrate()
+            .map_err(|e| eyre!("Dry-run migration scan failed: {e}"))?;
+
+        info!(
+            tables = stats.tables_migrated,
+            scanned = stats.records_scanned,
+            would_upgrade = stats.records_upgraded,
+            skipped = stats.records_skipped,
+            duration = ?stats.duration,
+            "Dry-run mode: migration scan complete (no changes committed)"
+        );
         return Ok(());
     }
 

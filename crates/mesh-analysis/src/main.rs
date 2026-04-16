@@ -51,6 +51,10 @@ struct Cli {
     #[arg(long)]
     peers_full: bool,
 
+    /// Show duplicate message rates
+    #[arg(long)]
+    duplicates: bool,
+
     /// Exit non-zero if any node is classified at this tier.
     /// Can be repeated: `--fail not-connected --fail multi-hop`.
     /// Valid tiers: fully-connected, multi-hop, not-connected.
@@ -124,6 +128,7 @@ async fn main() -> Result<()> {
         show_mesh: true,
         show_peers: cli.peers || cli.peers_full,
         show_peers_full: cli.peers_full,
+        show_duplicates: cli.duplicates,
     };
 
     print!("{}", format_report(&analysis, &options));

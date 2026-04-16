@@ -22,7 +22,7 @@
 
 use std::time::Duration;
 
-use arc_consensus_types::{Address, Height, Round, ValidatorSet};
+use arc_consensus_types::{signing::PrivateKey, Address, Height, Round, ValidatorSet};
 use arc_node_consensus::request::{AppRequest, Status};
 use malachitebft_app_channel::{ConsensusRequest, NetworkRequest};
 
@@ -112,10 +112,12 @@ async fn test_status_endpoint() {
     // Respond to status request
     server.expect_app_request(|req| match req {
         AppRequest::GetStatus(reply) => {
+            let public_key = PrivateKey::from([0x11; 32]).public_key();
             let status = Status {
                 height: Height::new(100),
                 round: Round::new(1),
                 address: Address::repeat_byte(1),
+                public_key,
                 proposer: Some(Address::repeat_byte(2)),
                 height_start_time: std::time::SystemTime::now(),
                 prev_payload_hash: None,
@@ -145,6 +147,7 @@ async fn test_status_endpoint() {
     assert_eq!(body.get("height").unwrap(), 100);
     assert_eq!(body.get("round").unwrap(), 1);
     assert!(body.get("address").is_some());
+    assert!(body.get("public_key").is_some());
     assert!(body.get("validator_set").is_some());
 }
 
@@ -381,10 +384,12 @@ async fn test_status_response_structure() {
     // Respond to status request with real data
     server.expect_app_request(|req| match req {
         AppRequest::GetStatus(reply) => {
+            let public_key = PrivateKey::from([0xAB; 32]).public_key();
             let status = Status {
                 height: Height::new(12345),
                 round: Round::new(7),
                 address: Address::repeat_byte(0xAB),
+                public_key,
                 proposer: Some(Address::repeat_byte(0xCD)),
                 height_start_time: std::time::SystemTime::now(),
                 prev_payload_hash: None,
@@ -414,6 +419,7 @@ async fn test_status_response_structure() {
     assert_eq!(body.get("height").unwrap(), 12345);
     assert_eq!(body.get("round").unwrap(), 7);
     assert!(body.get("address").is_some());
+    assert!(body.get("public_key").is_some());
     assert!(body.get("proposer").is_some());
     assert!(body.get("height_start_time").is_some());
     assert!(body.get("db_latest_height").is_some());

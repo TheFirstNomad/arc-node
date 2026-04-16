@@ -446,6 +446,9 @@ pub(crate) enum InfoSubcommand {
         /// Show full peer detail including peer types and scores
         #[clap(long, default_value = "false")]
         peers_full: bool,
+        /// Show duplicate message rates
+        #[clap(long, default_value = "false")]
+        duplicates: bool,
     },
     /// Show performance metrics: block latency and throughput
     Perf {
@@ -455,6 +458,15 @@ pub(crate) enum InfoSubcommand {
         /// Show only throughput metrics (txs/block, block size, gas/block)
         #[clap(long, default_value = "false")]
         throughput_only: bool,
+        /// Use two scrapes and show histogram deltas for the observation window only
+        #[clap(long, default_value = "false")]
+        interval: bool,
+        /// Seconds to wait before the first scrape (interval mode only)
+        #[clap(long, default_value = "30")]
+        warmup_seconds: u64,
+        /// Seconds between first and second scrape (interval mode only)
+        #[clap(long, default_value = "60")]
+        observation_seconds: u64,
     },
     /// Show Malachite CL store.db table statistics (record counts, height ranges)
     Store {

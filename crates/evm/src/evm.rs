@@ -101,8 +101,8 @@ use arc_precompiles::subcall::SubcallPrecompile;
 use revm::interpreter::interpreter_action::CallInputs;
 
 /// Flat gas cost charged for rejected subcall dispatches (unauthorized caller, wrong scheme,
-/// static context, value attached, init_subcall errors). Charged by `init_subcall_revert` calls.
-/// Prevents zero-cost probing of subcall precompile addresses.
+/// static context, value attached, sender spoofing, init_subcall errors). Charged by
+/// `init_subcall_revert` calls. Prevents zero-cost probing of subcall precompile addresses.
 const SUBCALL_DISPATCH_COST: u64 = 100;
 
 /// Construct a revert `FrameResult` for a subcall precompile rejection.
@@ -850,6 +850,17 @@ where
                 )));
             }
         };
+
+        // Prevent sender spoofing by contracts: if the precompile changes the caller
+        // (e.g. callFrom), the new caller must be tx.origin (the signing EOA).
+        if init_result.child_inputs.caller != call_inputs.caller
+            && init_result.child_inputs.caller != self.inner.ctx.tx().caller()
+        {
+            return Ok(ItemOrResult::Result(init_subcall_revert(
+                "sender spoofing requires tx.origin as sender",
+                call_inputs,
+            )));
+        }
 
         let return_memory_offset = call_inputs.return_memory_offset.clone();
 
@@ -3524,6 +3535,7 @@ mod tests {
         const REVERT_CONTRACT: Address = address!("c000000000000000000000000000000000000003");
         const CALLER_CONTRACT: Address = address!("c000000000000000000000000000000000000004");
         const WRAPPER_INNER: Address = address!("c000000000000000000000000000000000000005");
+        const SPOOFED_SENDER: Address = address!("a000000000000000000000000000000000000001");
 
         // ----- Integration tests -----
 
@@ -5473,6 +5485,51 @@ mod tests {
                 "success ({gas_used_success}) should use less gas than revert ({gas_used_revert}) \
                  due to SSTORE refund being forwarded only on success"
             );
+        }
+
+        // ================================================================
+        // tx.origin sender validation tests
+        // ================================================================
+
+        /// EOA → WRAPPER → callFrom(sender=SPOOFED_SENDER, target=ECHO, data)
+        /// SPOOFED_SENDER is neither tx.origin (EOA) nor the actual caller (WRAPPER),
+        /// so the sender validation rejects it.
+        #[test]
+        fn test_call_from_contract_sender_spoofing_rejected() {
+            let contract_a_code = wrapper_call_bytecode(CALL_FROM_ADDRESS);
+            let contract_b_code = echo_double_bytecode();
+            const CONTRACT_A: Address = WRAPPER;
+            const CONTRACT_B: Address = ECHO_CONTRACT;
+
+            let mut evm = setup_test_evm(
+                &[(EOA, U256::from(1_000_000))],
+                &[(CONTRACT_A, contract_a_code), (CONTRACT_B, contract_b_code)],
+                &[CONTRACT_A],
+            );
+
+            let inner_calldata = U256::from(42).to_be_bytes::<32>().to_vec();
+            let call_from_input =
+                encode_call_from_input(SPOOFED_SENDER, CONTRACT_B, &inner_calldata);
+
+            let tx = TxEnv {
+                caller: EOA,
+                kind: TxKind::Call(CONTRACT_A),
+                value: U256::ZERO,
+                gas_limit: 1_000_000,
+                gas_price: 0,
+                chain_id: Some(LOCAL_DEV.chain_id()),
+                data: call_from_input,
+                ..Default::default()
+            };
+
+            let result = evm.transact_one(tx).expect("transact_one should succeed");
+            match &result {
+                ExecutionResult::Success { output, .. } => {
+                    let reason = decode_revert_reason(output.data());
+                    assert_eq!(reason, "sender spoofing requires tx.origin as sender");
+                }
+                other => panic!("expected Success (wrapper catches revert), got {other:?}"),
+            }
         }
 
         /// complete_subcall error should consume all gas allocated to the subcall.

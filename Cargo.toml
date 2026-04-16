@@ -99,6 +99,7 @@ config             = { version = "0.14", features = ["toml"], default-features =
 #
 # See: https://github.com/eira-fransham/crunchy/issues/13
 crunchy = "=0.2.2"
+csv = "1.4"
 deranged = "0.5.5"
 directories        = "5.0.1"
 

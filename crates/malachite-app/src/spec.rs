@@ -264,7 +264,7 @@ pub const LOCALDEV: ConsensusSpec = ConsensusSpec {
 
 /// Error returned when the chain ID is not recognized.
 #[derive(Debug, Error)]
-#[error("Unknown chain ID {chain_id}; expected one of MAINNET (5042000), TESTNET (5042002), DEVNET (5042001), LOCALDEV (1337)")]
+#[error("Unknown chain ID {chain_id}; expected one of MAINNET (5042), TESTNET (5042002), DEVNET (5042001), LOCALDEV (1337)")]
 pub struct UnknownChainId {
     pub chain_id: String,
 }

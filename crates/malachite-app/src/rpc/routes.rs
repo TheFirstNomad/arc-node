@@ -456,13 +456,15 @@ mod tests {
             let pending_proposal_parts = vec![];
 
             let sk = PrivateKey::from([0x33; 32]);
-            let v = Validator::new(sk.public_key(), 1234);
+            let public_key = sk.public_key();
+            let v = Validator::new(public_key, 1234);
             let validator_set = ValidatorSet::new(vec![v]);
 
             Status {
                 height,
                 round,
                 address,
+                public_key,
                 proposer,
                 height_start_time,
                 prev_payload_hash,

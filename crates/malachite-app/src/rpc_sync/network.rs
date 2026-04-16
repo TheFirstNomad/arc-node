@@ -395,7 +395,7 @@ fn on_outgoing_request(
                 output_port.send(event);
             }
             Err(e) => {
-                warn!(%request_id, error = %e, "Fetch failed");
+                warn!(%request_id, error = format!("{e:#}"), "Fetch failed");
                 let event = NetworkEvent::SyncResponse(request_id, peer_id, None);
                 output_port.send(event);
             }

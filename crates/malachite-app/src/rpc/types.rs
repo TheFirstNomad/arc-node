@@ -304,6 +304,7 @@ pub(crate) struct RpcAppStatus {
     height: u64,
     round: i64,
     address: Address,
+    public_key: String,
     proposer: Address,
     height_start_time: DateTime<Utc>,
     prev_payload_hash: Option<BlockHash>,
@@ -320,6 +321,7 @@ impl From<Status> for RpcAppStatus {
             height: status.height.as_u64(),
             round: status.round.as_i64(),
             address: status.address,
+            public_key: format!("0x{}", hex::encode(status.public_key.as_bytes())),
             proposer: status.proposer.unwrap_or_else(|| Address::repeat_byte(0)),
             height_start_time: status.height_start_time.into(),
             prev_payload_hash: status.prev_payload_hash,
@@ -411,6 +413,7 @@ struct RpcValidator {
     address: Address,
     voting_power: u64,
     public_key: PublicKey,
+    public_key_hex: String,
 }
 
 #[derive(Serialize)]
@@ -583,6 +586,7 @@ impl From<&Validator> for RpcValidator {
         RpcValidator {
             address: v.address,
             voting_power: v.voting_power,
+            public_key_hex: format!("0x{}", hex::encode(v.public_key.as_bytes())),
             public_key: v.public_key,
         }
     }

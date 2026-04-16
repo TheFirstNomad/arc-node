@@ -406,6 +406,7 @@ impl State {
             height: self.current_height,
             round: self.current_round,
             address: self.address(),
+            public_key: *self.identity.public_key(),
             proposer: self.current_proposer,
             height_start_time: SystemTime::now() - self.stats.height_started().elapsed(),
             prev_payload_hash: self.previous_block.map(|b| b.block_hash),

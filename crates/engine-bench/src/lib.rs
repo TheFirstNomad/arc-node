@@ -14,17 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Arc EVM Node
-//!
-//! Implements the core EVM traits that bind all of the execution layer
-//! functionality together.
+mod bench;
+pub mod cli;
+pub use bench::new_payload_fcu;
 
-pub mod engine;
-pub mod node;
-pub mod payload;
-pub mod rpc;
-pub mod rpc_middleware;
+use cli::Command;
 
-// Re-export commonly used types
-pub use engine::ArcEngineValidator;
-pub use rpc_middleware::ArcRpcLayer;
+pub async fn run(command: Command) -> eyre::Result<()> {
+    bench::run(command).await
+}
